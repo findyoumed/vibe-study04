@@ -1,23 +1,27 @@
 /* [LOG: 20260330_1717] - Firebase Integration */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyBnbmMVAv6SpptBeEapoI2MXGPDbCL9PJI",
-    authDomain: "vibe-study04.firebaseapp.com",
-    projectId: "vibe-study04",
-    storageBucket: "vibe-study04.firebasestorage.app",
-    messagingSenderId: "595097935377",
-    appId: "1:595097935377:web:bdc6f62a509d160a56dbb0",
-    measurementId: "G-3MS8Q9G30Y"
+    apiKey: "AIzaSyC8cQZ4xdbS5EOGPKuukVJbd4PRG5IXCh0",
+    authDomain: "vibestudy-c9165.firebaseapp.com",
+    projectId: "vibestudy-c9165",
+    storageBucket: "vibestudy-c9165.firebasestorage.app",
+    messagingSenderId: "998799540859",
+    appId: "1:998799540859:web:a152200f139bc5a17058de",
+    measurementId: "G-QZ991X3M3M",
+    databaseURL: "https://vibestudy-c9165-default-rtdb.asia-southeast1.firebasedatabase.app/"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+const db = getDatabase(app);
+const todosRef = ref(db, 'todos');
 
-/* [LOG: 20260330_1640] - Todo App Core Logic */
+/* [LOG: 20260330_1817] - Todo App Core Logic (Firebase Realtime DB) */
 
 /**
  * 전역 상태 관리
@@ -38,14 +42,24 @@ const clearAllBtn = document.querySelector('#clear-all');
  * 초기화 단계
  */
 document.addEventListener('DOMContentLoaded', () => {
-    loadFromLocalStorage();
     setCurrentDate();
-    renderTodos();
+    listenToDatabase();
 });
 
 /**
+ * 실시간 데이터베이스 리스너
+ * [LOG: 20260330_1817]
+ */
+function listenToDatabase() {
+    onValue(todosRef, (snapshot) => {
+        const data = snapshot.val();
+        todos = data ? Object.values(data) : [];
+        renderTodos();
+    });
+}
+
+/**
  * 현재 날짜 표시
- * [LOG: 20260330_1640]
  */
 function setCurrentDate() {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -55,104 +69,72 @@ function setCurrentDate() {
 
 /**
  * 할 일 추가
- * [LOG: 20260330_1640]
+ * [LOG: 20260330_1817]
  */
 function addTodo() {
     const text = todoInput.value.trim();
     if (text === '') return;
 
+    const newId = Date.now();
     const newTodo = {
-        id: Date.now(),
+        id: newId,
         text: text,
         completed: false
     };
 
-    todos.push(newTodo);
+    // Firebase에 저장
+    set(ref(db, 'todos/' + newId), newTodo);
     todoInput.value = '';
-    saveToLocalStorage();
-    renderTodos();
 }
 
 /**
  * 할 일 삭제
  * @param {number} id 
- * [LOG: 20260330_1640]
+ * [LOG: 20260330_1817]
  */
 function deleteTodo(id) {
-    todos = todos.filter(todo => todo.id !== id);
-    saveToLocalStorage();
-    renderTodos();
+    set(ref(db, 'todos/' + id), null);
 }
 
 /**
  * 상태 토글 (완료/미완료)
  * @param {number} id 
- * [LOG: 20260330_1640]
+ * [LOG: 20260330_1817]
  */
 function toggleComplete(id) {
-    todos = todos.map(todo => {
-        if (todo.id === id) {
-            return { ...todo, completed: !todo.completed };
-        }
-        return todo;
-    });
-    saveToLocalStorage();
-    renderTodos();
+    const todo = todos.find(t => t.id === id);
+    if (todo) {
+        set(ref(db, 'todos/' + id), { ...todo, completed: !todo.completed });
+    }
 }
 
 /**
  * 할 일 수정
  * @param {number} id 
  * @param {string} newText 
- * [LOG: 20260330_1640]
+ * [LOG: 20260330_1817]
  */
 function editTodo(id, newText) {
     if (newText.trim() === '') return;
-    todos = todos.map(todo => {
-        if (todo.id === id) {
-            return { ...todo, text: newText.trim() };
-        }
-        return todo;
-    });
-    saveToLocalStorage();
-    renderTodos();
-}
-
-/**
- * 전체 삭제
- * [LOG: 20260330_1640]
- */
-function clearAll() {
-    if (todos.length === 0) return;
-    if (confirm('모든 할 일을 삭제하시겠습니까?')) {
-        todos = [];
-        saveToLocalStorage();
-        renderTodos();
+    const todo = todos.find(t => t.id === id);
+    if (todo) {
+        set(ref(db, 'todos/' + id), { ...todo, text: newText.trim() });
     }
 }
 
 /**
- * 로컬 스토리지 저장
- * [LOG: 20260330_1640]
+ * 전체 삭제
+ * [LOG: 20260330_1817]
  */
-function saveToLocalStorage() {
-    localStorage.setItem('premium-todos', JSON.stringify(todos));
-}
-
-/**
- * 로컬 스토리지 로드
- * [LOG: 20260330_1640]
- */
-function loadFromLocalStorage() {
-    const stored = localStorage.getItem('premium-todos');
-    if (stored) {
-        todos = JSON.parse(stored);
+function clearAll() {
+    if (todos.length === 0) return;
+    if (confirm('모든 할 일을 삭제하시겠습니까?')) {
+        set(todosRef, null);
     }
 }
 
 /**
  * UI 렌더링
- * [LOG: 20260330_1640]
  */
 function renderTodos() {
     todoList.innerHTML = '';
